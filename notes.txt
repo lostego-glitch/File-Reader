@@ -1,0 +1,7 @@
+Run Server: python manage.py runserver
+
+Run Venv: venv\Scripts\activate
+
+Test account
+Testadmins
+adminadmin1

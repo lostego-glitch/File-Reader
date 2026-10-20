@@ -1,0 +1,649 @@
+
+{% load viewer_filters %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Analyzer</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f6f9;color:#252b36}
+header{background:#243b55;color:#fff;padding:24px 6%;display:flex;justify-content:space-between;align-items:center;gap:20px}
+header h1{margin:0 0 8px;font-size:30px}
+header p{margin:0;color:#dbe5f0;font-size:15px}
+main{width:92%;max-width:1250px;margin:25px auto}
+.panel{background:#fff;padding:22px;margin-bottom:22px;border-radius:8px;box-shadow:0 2px 8px #0000000f}
+h2{margin-top:0;color:#243b55;font-size:21px}
+h3{color:#334e68;font-size:17px}
+p{line-height:1.5}
+label{display:block;margin:12px 0 6px;font-weight:bold;font-size:14px}
+input[type=file],select,input[type=text],input[type=number]{width:100%;padding:10px;border:1px solid #cbd2d9;border-radius:5px;background:#fff;font-size:14px}
+input[type=checkbox],input[type=radio]{width:auto;margin-right:7px}
+button,.button{display:inline-block;border:0;border-radius:5px;background:#243b55;color:#fff;padding:10px 16px;font-size:14px;cursor:pointer;text-decoration:none;margin-top:12px}
+button:hover,.button:hover{background:#334e68}
+.secondary-button{background:#526d82}
+.logout-button{background:#526d82;margin:0;white-space:nowrap}
+.upload-help,.info{background:#eef4fa;border-left:4px solid #486581;padding:12px 15px;margin-top:15px;border-radius:4px;font-size:14px}
+.message{padding:12px 15px;border-radius:5px;margin-bottom:15px;background:#eef4fa;overflow-wrap:anywhere}
+.status{padding:12px 15px;background:#edf7ed;border-left:4px solid #3b7a57;border-radius:4px;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.full-width{grid-column:1/-1}
+.table-container{overflow-x:auto;margin-top:15px}
+table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+th,td{border:1px solid #d9e0e7;padding:9px 11px;text-align:left;white-space:nowrap}
+th{background:#eaf0f6;color:#243b55}
+tr:nth-child(even){background:#f8fafc}
+.field-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.field-tag{background:#eaf0f6;color:#243b55;border-radius:4px;padding:7px 10px;font-size:13px}
+.draggable-field{cursor:grab;user-select:none;border:1px solid #bcccdc}
+.draggable-field:active{cursor:grabbing}
+.drop-zone{min-height:130px;padding:15px;border:2px dashed #bcccdc;border-radius:7px;background:#f8fafc}
+.drop-zone h3{margin-top:0}
+.drop-zone p{color:#64748b;font-size:13px}
+.drop-zone.drag-over{border-color:#243b55;background:#eef4fa}
+.dropped-fields{display:flex;flex-wrap:wrap;gap:8px;min-height:35px}
+.dropped-field{display:inline-flex;align-items:center;gap:8px;padding:7px 9px;background:#dbeafe;color:#243b55;border-radius:5px;font-size:13px;overflow-wrap:anywhere}
+.remove-field{border:0;background:transparent;color:#243b55;padding:0;margin:0;font-size:16px;line-height:1;cursor:pointer}
+.remove-field:hover{background:transparent;color:#b91c1c}
+.chart-image{display:block;max-width:100%;height:auto;margin:15px auto}
+.empty-message{color:#64748b;font-style:italic}
+.option{display:block;margin:10px 0;font-weight:normal}
+.report-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:15px 0}
+.metric{padding:14px;background:#f3f6f9;border-radius:6px}
+.metric strong{display:block;font-size:25px;color:#243b55;margin-top:6px}
+.warning{background:#fff4d6;border-left:4px solid #c58b18;padding:12px 15px;border-radius:4px}
+.error-cell{background:#ffe1e1!important;color:#8b1111}
+.insight-list{padding-left:22px}
+.insight-list li{line-height:1.6;margin-bottom:9px}
+footer{text-align:center;color:#64748b;font-size:13px;padding:20px}
+@media(max-width:700px){
+.grid{grid-template-columns:1fr}
+.full-width{grid-column:auto}
+header{align-items:flex-start}
+header h1{font-size:25px}
+main{width:95%}
+.panel{padding:16px}
+.report-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:430px){
+header{flex-direction:column}
+.logout-button{align-self:flex-start}
+}
+</style>
+</head>
+<body>
+<header>
+<div>
+<h1>Data Analyzer</h1>
+<p>Upload, explore, summarize, clean, and analyze your data in one place.</p>
+</div>
+<form method="POST" action="{% url 'logout' %}">
+{% csrf_token %}
+<button type="submit" class="logout-button">Logout</button>
+</form>
+</header>
+
+<main>
+{% if messages %}
+{% for message in messages %}
+<div class="message">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+{% if error %}
+<div class="message">{{ error }}</div>
+{% endif %}
+
+{% if uploaded %}
+<div class="status">
+<strong>File loaded:</strong> {{ file_name }}
+{% if file_type %}
+<br><strong>File type:</strong> {{ file_type|upper }}
+{% endif %}
+</div>
+{% endif %}
+
+<section class="panel">
+<h2>1. Upload Your Data</h2>
+<p>Upload an Excel workbook, CSV file, or JSON file to begin analyzing your data.</p>
+<form method="POST" enctype="multipart/form-data">
+{% csrf_token %}
+<input type="hidden" name="action" value="upload">
+<label for="excel_file">Choose a data file</label>
+<input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls,.csv,.json" required>
+<button type="submit">Upload and Analyze</button>
+</form>
+<div class="upload-help">
+<strong>Supported file formats</strong>
+<ul>
+<li>Excel workbooks: .xlsx and .xls</li>
+<li>Comma-separated values: .csv</li>
+<li>JavaScript Object Notation: .json</li>
+</ul>
+Excel worksheets can be selected after uploading an Excel workbook. Cleaning creates a separate file and does not overwrite your uploaded file. For Excel and CSV files, make sure the column headers are in the first row unless you intend to use the data cleaner to detect misplaced headers.
+</div>
+</section>
+
+{% if uploaded %}
+
+{% if sheets %}
+<section class="panel">
+<h2>Choose an Excel Worksheet</h2>
+<form method="POST">
+{% csrf_token %}
+<input type="hidden" name="action" value="change_sheet">
+<label for="sheet_name">Worksheet</label>
+<select id="sheet_name" name="sheet_name">
+{% for sheet in sheets %}
+<option value="{{ sheet }}" {% if sheet == selected_sheet %}selected{% endif %}>{{ sheet }}</option>
+{% endfor %}
+</select>
+<button type="submit">Load Worksheet</button>
+</form>
+</section>
+{% endif %}
+
+<section class="panel">
+<h2>2. Data Preview</h2>
+<p>Review the columns and records loaded from your file. The preview displays up to 100 records.</p>
+{% if headers and table_data %}
+<div class="field-list">
+{% for header in headers %}
+<span class="field-tag">{{ header }}</span>
+{% endfor %}
+</div>
+<div class="table-container">
+<table>
+<thead><tr>{% for header in headers %}<th>{{ header }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for row in table_data %}
+<tr>{% for header in headers %}<td>{{ row|get_item:header }}</td>{% endfor %}</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<p class="empty-message">No preview data is currently available.</p>
+{% endif %}
+</section>
+
+<section class="panel">
+<h2>3. Dataset Insights</h2>
+<p>These findings summarize the uploaded data independently of your PivotTable settings.</p>
+{% if data_insights %}
+<ul class="insight-list">
+{% for insight in data_insights %}
+<li>{{ insight }}</li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="empty-message">No dataset insights are available for this file.</p>
+{% endif %}
+</section>
+
+<section class="panel">
+<h2>4. Data Cleaner</h2>
+<p>Scan the current file for misplaced headers, missing values, empty rows, duplicate records, and values that do not match the expected column type. Scanning does not change the uploaded file. Review the results before approving the cleaning operation.</p>
+
+<form method="POST">
+{% csrf_token %}
+<input type="hidden" name="action" value="scan_cleaner">
+{% if selected_sheet %}
+<input type="hidden" name="sheet_name" value="{{ selected_sheet }}">
+{% endif %}
+<button type="submit">Scan Data Quality</button>
+</form>
+
+{% if cleaner_report %}
+<div class="report-cards">
+<div class="metric">Rows scanned<strong>{{ cleaner_report.row_count }}</strong></div>
+<div class="metric">Missing cells<strong>{{ cleaner_report.missing_count }}</strong></div>
+<div class="metric">Type mismatches<strong>{{ cleaner_report.mismatch_count }}</strong></div>
+<div class="metric">Duplicate rows<strong>{{ cleaner_report.duplicate_rows }}</strong></div>
+</div>
+
+{% if cleaner_report.header_misplaced %}
+<div class="warning">
+<strong>Possible misplaced headers detected.</strong>
+The likely header row is row {{ cleaner_report.header_row|add:1 }} in the raw file. Review the detected row before correcting the headers.
+</div>
+{% else %}
+<p>No misplaced header row was confidently detected.</p>
+{% endif %}
+
+<p><strong>Completely empty rows:</strong> {{ cleaner_report.empty_rows }}.
+<strong>Columns:</strong> {{ cleaner_report.column_count }}.</p>
+
+{% if cleaner_report.inferred_types %}
+<h3>Detected Column Types</h3>
+<div class="table-container">
+<table>
+<thead><tr><th>Column</th><th>Expected type</th></tr></thead>
+<tbody>
+{% for column, type_name in cleaner_report.inferred_types.items %}
+<tr><td>{{ column }}</td><td>{{ type_name }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+
+{% if cleaner_report.missing_cells %}
+<h3>Examples of Missing Cells</h3>
+<div class="table-container">
+<table>
+<thead><tr><th>Data row</th><th>Column</th></tr></thead>
+<tbody>
+{% for issue in cleaner_report.missing_cells %}
+<tr><td>{{ issue.row }}</td><td>{{ issue.column }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+
+{% if cleaner_report.mismatches %}
+<h3>Examples of Type Mismatches</h3>
+<div class="table-container">
+<table>
+<thead><tr><th>Data row</th><th>Column</th><th>Value</th></tr></thead>
+<tbody>
+{% for issue in cleaner_report.mismatches %}
+<tr><td>{{ issue.row }}</td><td>{{ issue.column }}</td><td>{{ issue.value }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+
+<div class="warning">
+<strong>Review before cleaning:</strong> automatic type detection is an estimate. Text-based IDs, leading zeroes, and dates in different formats may need manual review. Duplicate records are kept by default.
+</div>
+
+<form method="POST" onsubmit="return confirm('You are approving the selected cleaning operations. The original upload will remain unchanged and a separate cleaned file will be downloaded. Continue?');">
+{% csrf_token %}
+<input type="hidden" name="action" value="apply_cleaner">
+{% if selected_sheet %}
+<input type="hidden" name="sheet_name" value="{{ selected_sheet }}">
+{% endif %}
+
+<h3>Choose Cleaning Options</h3>
+
+{% if cleaner_report.header_misplaced %}
+<label class="option">
+<input type="checkbox" name="fix_headers" value="yes" checked>
+Correct the detected misplaced header row (use row {{ cleaner_report.header_row|add:1 }} as the column names)
+</label>
+{% else %}
+<input type="hidden" name="fix_headers" value="no">
+{% endif %}
+
+<label for="fill_missing">How should missing cells be handled?</label>
+<select name="fill_missing" id="fill_missing">
+<option value="context" selected>Context-based: zero for likely count or quantity columns; otherwise blank</option>
+<option value="blank">Replace missing cells with blanks</option>
+<option value="zero">Replace missing cells with zero</option>
+<option value="keep">Keep missing values unchanged</option>
+</select>
+
+<input type="hidden" name="remove_empty_rows" value="no">
+<label class="option">
+<input type="checkbox" name="remove_empty_rows" value="yes" checked>
+Remove completely empty rows
+</label>
+
+<label for="missing_rows">Rows with missing values</label>
+<select name="missing_rows" id="missing_rows">
+<option value="highlight" selected>Highlight affected rows red in the new Excel file</option>
+<option value="delete">Delete affected rows</option>
+<option value="keep">Keep affected rows without highlighting</option>
+</select>
+
+<label for="mismatch_rows">Rows with incorrect data types</label>
+<select name="mismatch_rows" id="mismatch_rows">
+<option value="highlight" selected>Highlight affected rows red in the new Excel file</option>
+<option value="delete">Delete affected rows</option>
+<option value="keep">Keep affected rows without highlighting</option>
+</select>
+
+<p><strong>Duplicates:</strong> Duplicate records will be kept. The cleaner will not automatically remove duplicate records.</p>
+
+<label class="option">
+<input type="checkbox" name="consent_cleaning" value="yes" required>
+I reviewed the report and approve creating a cleaned copy with these settings.
+</label>
+<button type="submit">Apply Cleaning and Download New File</button>
+</form>
+{% endif %}
+</section>
+
+<section class="panel">
+<h2>5. Create a Pivot Table</h2>
+<p>Drag fields into X-Axis (Rows), Y-Axis (Columns), Values, and Filters. Choose an aggregation to summarize the selected values.</p>
+<form method="POST" id="pivotForm">
+{% csrf_token %}
+<input type="hidden" name="action" value="build_pivot">
+
+<h3>Available Fields</h3>
+<div class="field-list" id="availableFields">
+{% for header in headers %}
+<div class="field-tag draggable-field" draggable="true" data-field="{{ header }}">{{ header }}</div>
+{% endfor %}
+</div>
+
+<div class="grid" style="margin-top:20px">
+<div class="drop-zone" data-target="row_fields">
+<h3>X-Axis (Rows)</h3>
+<p>Drag fields here to group rows.</p>
+<div class="dropped-fields" id="row_fields_display"></div>
+</div>
+<div class="drop-zone" data-target="column_fields">
+<h3>Y-Axis (Columns)</h3>
+<p>Drag fields here to split results into groups.</p>
+<div class="dropped-fields" id="column_fields_display"></div>
+</div>
+<div class="drop-zone" data-target="value_fields">
+<h3>Values</h3>
+<p>Drag fields here to summarize or count.</p>
+<div class="dropped-fields" id="value_fields_display"></div>
+</div>
+<div class="drop-zone" data-target="filter_fields">
+<h3>Filters</h3>
+<p>Drag fields here to designate filter fields.</p>
+<div class="dropped-fields" id="filter_fields_display"></div>
+</div>
+</div>
+
+<div id="pivotHiddenInputs"></div>
+
+<div class="grid" style="margin-top:20px">
+<div>
+<label for="aggregation">Aggregation</label>
+<select name="aggregation" id="aggregation">
+<option value="count" {% if aggregation == "count" %}selected{% endif %}>Count</option>
+<option value="sum" {% if aggregation == "sum" %}selected{% endif %}>Sum</option>
+<option value="average" {% if aggregation == "average" %}selected{% endif %}>Average</option>
+<option value="min" {% if aggregation == "min" %}selected{% endif %}>Minimum</option>
+<option value="max" {% if aggregation == "max" %}selected{% endif %}>Maximum</option>
+</select>
+</div>
+<div>
+<label for="chart_type">Chart Type</label>
+<select name="chart_type" id="chart_type">
+<option value="bar" {% if chart_type == "bar" %}selected{% endif %}>Bar Chart</option>
+<option value="horizontal_bar" {% if chart_type == "horizontal_bar" %}selected{% endif %}>Horizontal Bar Chart</option>
+<option value="line" {% if chart_type == "line" %}selected{% endif %}>Line Chart</option>
+<option value="area" {% if chart_type == "area" %}selected{% endif %}>Area Chart</option>
+<option value="pie" {% if chart_type == "pie" %}selected{% endif %}>Pie Chart</option>
+<option value="scatter" {% if chart_type == "scatter" %}selected{% endif %}>Scatter Plot</option>
+</select>
+</div>
+</div>
+
+<button type="submit">Generate Pivot Table</button>
+<button type="button" class="secondary-button" id="clearPivot">Clear Fields</button>
+</form>
+</section>
+
+{% if pivot_table %}
+<section class="panel">
+<h2>6. Pivot Table Results</h2>
+<div class="table-container">
+<table>
+{% if pivot_headers %}
+<thead><tr>{% for header in pivot_headers %}<th>{{ header }}</th>{% endfor %}</tr></thead>
+{% endif %}
+<tbody>
+{% for row in pivot_table %}
+<tr>
+{% if pivot_headers %}
+{% for header in pivot_headers %}<td>{{ row|get_item:header }}</td>{% endfor %}
+{% else %}
+{% for value in row.values %}<td>{{ value }}</td>{% endfor %}
+{% endif %}
+</tr>
+{% empty %}
+<tr><td>No pivot results are available.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</section>
+{% endif %}
+
+{% if pivot_chart %}
+<section class="panel">
+<h2>7. Pivot Chart</h2>
+<img class="chart-image" src="data:image/png;base64,{{ pivot_chart }}" alt="Generated pivot chart">
+<form method="POST">
+{% csrf_token %}
+<input type="hidden" name="action" value="download_chart_pdf">
+<input type="hidden" name="sheet_name" value="{{ selected_sheet }}">
+{% for field in row_fields %}<input type="hidden" name="row_fields" value="{{ field }}">{% endfor %}
+{% for field in column_fields %}<input type="hidden" name="column_fields" value="{{ field }}">{% endfor %}
+{% for field in value_fields %}<input type="hidden" name="value_fields" value="{{ field }}">{% endfor %}
+{% for field in filter_fields %}<input type="hidden" name="filter_fields" value="{{ field }}">{% endfor %}
+<input type="hidden" name="aggregation" value="{{ aggregation }}">
+<input type="hidden" name="chart_type" value="{{ chart_type }}">
+<input type="hidden" name="chart_title" value="{{ chart_title }}">
+<button type="submit">Save Chart as PDF</button>
+</form>
+</section>
+{% endif %}
+
+{% if pivot_insights %}
+<section class="panel">
+<h2>8. PivotTable Statistical Insights</h2>
+<p>These insights describe the generated PivotTable and its selected aggregation.</p>
+<ul class="insight-list">
+{% for insight in pivot_insights %}
+<li>{{ insight }}</li>
+{% endfor %}
+</ul>
+</section>
+{% endif %}
+
+<section class="panel">
+<h2>9. Financial Ratio Analysis</h2>
+<p>Calculate financial ratios using the relevant columns in your uploaded dataset. For account-based statements, use an account or particulars column and a numeric amount column.</p>
+<form method="POST">
+{% csrf_token %}
+<input type="hidden" name="action" value="financial_analysis">
+<input type="hidden" name="sheet_name" value="{{ selected_sheet }}">
+<button type="submit">Calculate Financial Ratios</button>
+</form>
+
+{% if financial_ratios %}
+<div class="table-container">
+<table>
+<thead><tr><th>Financial Ratio</th><th>Result</th><th>Interpretation</th></tr></thead>
+<tbody>
+{% for ratio in financial_ratios %}
+<tr>
+<td>{{ ratio.name }}</td>
+<td>{{ ratio.display_value }}</td>
+<td>{{ ratio.interpretation }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+</section>
+
+<section class="panel">
+<h2>10. Export Analysis Results</h2>
+<div class="grid">
+<div>
+<h3>Export as JSON</h3>
+<p>Save the source data, dataset insights, PivotTable, chart data, and financial ratios in JSON format.</p>
+<form method="POST">
+{% csrf_token %}
+<input type="hidden" name="action" value="export_json">
+<input type="hidden" name="sheet_name" value="{{ selected_sheet }}">
+{% for field in row_fields %}<input type="hidden" name="row_fields" value="{{ field }}">{% endfor %}
+{% for field in column_fields %}<input type="hidden" name="column_fields" value="{{ field }}">{% endfor %}
+{% for field in value_fields %}<input type="hidden" name="value_fields" value="{{ field }}">{% endfor %}
+{% for field in filter_fields %}<input type="hidden" name="filter_fields" value="{{ field }}">{% endfor %}
+<input type="hidden" name="aggregation" value="{{ aggregation }}">
+<input type="hidden" name="chart_type" value="{{ chart_type }}">
+<input type="hidden" name="chart_title" value="{{ chart_title }}">
+<button type="submit">Export JSON</button>
+</form>
+</div>
+<div>
+<h3>Export as Excel</h3>
+<p>Save the source data, filtered data, PivotTable, insights, and financial ratios in an Excel workbook.</p>
+<form method="POST">
+{% csrf_token %}
+<input type="hidden" name="action" value="export_excel">
+<input type="hidden" name="sheet_name" value="{{ selected_sheet }}">
+{% for field in row_fields %}<input type="hidden" name="row_fields" value="{{ field }}">{% endfor %}
+{% for field in column_fields %}<input type="hidden" name="column_fields" value="{{ field }}">{% endfor %}
+{% for field in value_fields %}<input type="hidden" name="value_fields" value="{{ field }}">{% endfor %}
+{% for field in filter_fields %}<input type="hidden" name="filter_fields" value="{{ field }}">{% endfor %}
+<input type="hidden" name="aggregation" value="{{ aggregation }}">
+<button type="submit">Export Excel</button>
+</form>
+</div>
+</div>
+</section>
+
+{% endif %}
+</main>
+
+<footer>Data Analyzer</footer>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const available = document.getElementById("availableFields");
+    const hidden = document.getElementById("pivotHiddenInputs");
+    const zones = document.querySelectorAll(".drop-zone");
+    const clear = document.getElementById("clearPivot");
+    const form = document.getElementById("pivotForm");
+
+    if (!available || !hidden || !form) return;
+
+    const groups = {
+        row_fields: [],
+        column_fields: [],
+        value_fields: [],
+        filter_fields: []
+    };
+
+    let dragged = null;
+
+    function removeAll(name) {
+        Object.keys(groups).forEach(key => {
+            groups[key] = groups[key].filter(value => value !== name);
+        });
+    }
+
+    function makeDraggable(element, name, source) {
+        element.draggable = true;
+        element.addEventListener("dragstart", event => {
+            dragged = {field: name, source: source};
+            event.dataTransfer.setData("text/plain", name);
+            event.dataTransfer.effectAllowed = "move";
+        });
+    }
+
+    function render() {
+        Object.keys(groups).forEach(key => {
+            const display = document.getElementById(key + "_display");
+            if (!display) return;
+            display.replaceChildren();
+
+            groups[key].forEach(name => {
+                const tag = document.createElement("div");
+                tag.className = "dropped-field";
+
+                const text = document.createElement("span");
+                text.textContent = name;
+
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "remove-field";
+                button.textContent = "×";
+                button.setAttribute("aria-label", "Remove " + name);
+                button.addEventListener("click", () => {
+                    removeAll(name);
+                    render();
+                });
+
+                tag.append(text, button);
+                makeDraggable(tag, name, key);
+                display.appendChild(tag);
+            });
+        });
+
+        hidden.replaceChildren();
+
+        Object.keys(groups).forEach(key => {
+            groups[key].forEach(name => {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = key;
+                input.value = name;
+                hidden.appendChild(input);
+            });
+        });
+
+        available.querySelectorAll(".draggable-field").forEach(element => {
+            const name = element.dataset.field;
+            element.style.opacity = Object.values(groups).some(
+                group => group.includes(name)
+            ) ? ".45" : "1";
+        });
+    }
+
+    available.querySelectorAll(".draggable-field").forEach(element => {
+        makeDraggable(element, element.dataset.field, "available");
+    });
+
+    zones.forEach(zone => {
+        zone.addEventListener("dragover", event => {
+            event.preventDefault();
+            zone.classList.add("drag-over");
+        });
+
+        zone.addEventListener("dragleave", event => {
+            if (!zone.contains(event.relatedTarget)) {
+                zone.classList.remove("drag-over");
+            }
+        });
+
+        zone.addEventListener("drop", event => {
+            event.preventDefault();
+            zone.classList.remove("drag-over");
+
+            const target = zone.dataset.target;
+            if (!dragged || !groups[target]) return;
+
+            removeAll(dragged.field);
+            groups[target].push(dragged.field);
+            render();
+            dragged = null;
+        });
+    });
+
+    if (clear) {
+        clear.addEventListener("click", () => {
+            Object.keys(groups).forEach(key => groups[key] = []);
+            render();
+        });
+    }
+
+    form.addEventListener("submit", event => {
+        if (!groups.value_fields.length) {
+            event.preventDefault();
+            alert("Please add at least one field to Values before generating the PivotTable.");
+        }
+    });
+
+    render();
+});
+</script>
+</body>
+</html>
